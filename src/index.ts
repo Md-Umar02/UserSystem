@@ -22,7 +22,7 @@
 // Proper return types
 // Handle edge cases (user not found)
 
-import { log } from "console";
+import mysql from "mysql2/promise";
 import * as readline from "readline";
 
 interface User{
@@ -31,31 +31,41 @@ interface User{
     isActive: boolean;
 }
 
+const pool = mysql.createPool({
+    host: "localhost",
+    user: "root",
+    password: "rootUser",
+    database: "user_system"
+})
+
 let users: User[] = []
 
-function addUser(u: User) : void {
+async function addUser(u: User) : Promise<void> {
     const exists = users.find(user => user.id === u.id);
     if(exists) {
         throw new Error("duplicate");
     }
-    users.push(u);
+    await pool.execute(
+        "INSERT INTO users (id, name, isActive) values (?, ?, ?)",
+        [u.id, u.name, u.isActive]
+    );
 }
 
-function getUserById(id: number) : User | undefined {
-    const user = users.find(u => u.id === id);
-    if(user === undefined) {
-        throw new Error("Not Found");
-    }
-    return user;
+async function getUserById(id: number) : Promise<User | undefined> {
+    // const user = users.find(u => u.id === id);
+    // if(user === undefined) {
+    //     throw new Error("Not Found");
+    // }
+    const [rows] = await pool.execute("SELECT * FROM users WHERE id = ?", [id]);
+    const result = (rows as any[])[0];
+    return result
+        ? { id: result.id, name: result.name, isActive: !!result.isActive }
+        : undefined;
 }
 
-function deleteUser(id: number) : boolean {
-    const user = users.findIndex(u => u.id === id);
-    if(user === -1) {
-        throw new Error("Not Found");
-    }
-    users.splice(user, 1);
-    return true;
+async function deleteUser(id: number): Promise<boolean> {
+  const [result] = await pool.execute("DELETE FROM users WHERE id = ?", [id]);
+  return (result as mysql.ResultSetHeader).affectedRows > 0;
 }
 
 function updateUser(userId: number, updatedUser: Partial<User>) {
