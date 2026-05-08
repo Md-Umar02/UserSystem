@@ -1,5 +1,6 @@
 import mysql from "mysql2/promise";
 import * as readline from "readline";
+import fs from "fs/promises";
 
 interface User {
   id: number;
@@ -60,12 +61,35 @@ async function updateUser(userId: number, updatedUser: Partial<User>): Promise<U
   return newUser;
 }
 
+async function insertBulkUsers(filePath: string) : Promise<void> {
+  try {
+    const data = await fs.readFile(filePath, "utf-8");
+    const users: User[] = JSON.parse(data);
+
+    if (users.length === 0) {
+      console.log("❌ No users found in JSON file.");
+      return;
+    }
+
+    const values = users.map(u => [u.id, u.name, u.email, u.isActive]);
+
+    await pool.query(
+      "INSERT INTO users (id, name, email, isActive) VALUES ?",
+      [values]
+    );
+
+    console.log(`Inserted ${users.length} users from ${filePath}`);
+  } catch (err) {
+    console.error("Error inserting bulk users:", (err as Error).message);
+  }
+}
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
 });
 
-rl.question("Choose operation (add/get/update/delete): ", async (operation) => {
+rl.question("Choose operation (add/get/update/delete/bulk): ", async (operation) => {
   switch (operation.toLowerCase()) {
     case "add":
       rl.question("Enter id: ", (id) => {
@@ -137,6 +161,14 @@ rl.question("Choose operation (add/get/update/delete): ", async (operation) => {
         rl.close();
       });
       break;
+
+      case "bulk":
+      rl.question("Enter JSON file path: ", async (filePath) => {
+        await insertBulkUsers(filePath);
+        rl.close();
+      });
+      break;
+
 
     default:
       console.log("Invalid operation.");
